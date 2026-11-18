@@ -62,6 +62,12 @@
   }
   .btn:hover { opacity: 0.85; }
   input[type="file"] { display: none; }
+  @media screen { #zone-newsletter { zoom: var(--zoom-lettre, 1.25); } }
+  @media print { #zone-newsletter { zoom: 1 !important; } }
+  .taille-lettre { margin-left: auto; display: flex; align-items: center; gap: 6px; font: bold 13px Arial, Helvetica, sans-serif; color: var(--violet-fonce); }
+  .taille-lettre button { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--violet-fonce); background: #fff; color: var(--violet-fonce); font: bold 18px Arial, sans-serif; cursor: pointer; line-height: 1; }
+  .taille-lettre button:disabled { opacity: .35; cursor: default; }
+  .taille-lettre output { min-width: 46px; text-align: center; }
   .statut-cloud { display: block; font-size: 12px; margin-top: 2px; color: #3f9c6e; font-weight: bold; }
   .statut-cloud.attention { color: #c8483f; }
   .btn.cloud { background: #3f9c6e; }
@@ -81,7 +87,7 @@
   .alerte-fichier { background: #fff4e5; border-left: 4px solid #d99a3d; padding: 10px 14px; border-radius: 0 4px 4px 0; margin-top: 12px !important; }
 
   .filtres {
-    max-width: 720px;
+    max-width: 900px;
     margin: 20px auto 0 auto;
     display: flex;
     gap: 8px;
@@ -728,6 +734,12 @@ input[type="color"] { width: 30px; height: 26px; padding: 1px; border: 1px solid
   <span class="filtre-tag" data-public="Enseignants" role="button" tabindex="0">Enseignants</span>
   <span class="filtre-tag" data-public="Élèves" role="button" tabindex="0">Élèves</span>
   <span class="filtre-tag" data-public="Parents" role="button" tabindex="0">Parents</span>
+  <div class="taille-lettre" role="group" aria-label="Taille d’affichage de la lettre">
+    <span>Taille</span>
+    <button type="button" id="btn-zoom-moins" title="Réduire l’affichage" aria-label="Réduire l’affichage">−</button>
+    <output id="valeur-zoom" aria-live="polite">125 %</output>
+    <button type="button" id="btn-zoom-plus" title="Agrandir l’affichage" aria-label="Agrandir l’affichage">+</button>
+  </div>
 </div>
 <p class="note-filtre" id="note-filtre" hidden>Aperçu filtré : les blocs destinés à d’autres publics sont masqués. Le PDF et le code HTML généré suivent ce filtre.</p>
 
@@ -1993,9 +2005,9 @@ function majCloud(message) {
   if (message) { s.textContent = message; s.classList.remove('attention'); return; }
   if (synchroEnCours) return;
   let t = '☁️ Lettre en ligne';
-  if (publier) t += ' · modifications non publiées';
+  if (distantPlusRecent) t += ' · nouveautés publiées par des collègues : cliquez sur Actualiser';
+  else if (publier) t += ' · modifications non publiées';
   else t += ' · à jour';
-  if (distantPlusRecent) t += ' · des collègues ont publié : cliquez sur Actualiser';
   s.textContent = t;
   s.classList.toggle('attention', publier || distantPlusRecent);
 }
@@ -2124,6 +2136,31 @@ function initCloud() {
   }
 }
 
+/* ===================== Taille d'affichage (écran seulement : PDF et HTML exportés inchangés) ===================== */
+const CLE_ZOOM = 'drane-lettre-zoom';
+const ZOOM_MIN = 100, ZOOM_MAX = 160, ZOOM_PAS = 10;
+let zoomChoisi = 125;
+try { const z = parseInt(localStorage.getItem(CLE_ZOOM), 10); if (z >= ZOOM_MIN && z <= ZOOM_MAX) zoomChoisi = z; } catch (e) {}
+function appliquerZoom() {
+  const maxEcran = Math.floor((window.innerWidth - 32) / 720 * 100);   // la lettre ne déborde jamais de l'écran
+  const effectif = Math.max(ZOOM_MIN > maxEcran ? maxEcran : ZOOM_MIN, Math.min(zoomChoisi, maxEcran));
+  document.documentElement.style.setProperty('--zoom-lettre', String(Math.max(effectif, 50) / 100));
+  $('valeur-zoom').textContent = zoomChoisi + ' %';
+  $('btn-zoom-moins').disabled = zoomChoisi <= ZOOM_MIN;
+  $('btn-zoom-plus').disabled = zoomChoisi >= ZOOM_MAX;
+}
+function changerZoom(delta) {
+  zoomChoisi = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomChoisi + delta));
+  try { localStorage.setItem(CLE_ZOOM, String(zoomChoisi)); } catch (e) {}
+  appliquerZoom();
+}
+function initZoom() {
+  $('btn-zoom-moins').addEventListener('click', () => changerZoom(-ZOOM_PAS));
+  $('btn-zoom-plus').addEventListener('click', () => changerZoom(ZOOM_PAS));
+  window.addEventListener('resize', appliquerZoom);
+  appliquerZoom();
+}
+
 /* le code de la lettre est lu avant le chargement du brouillon */
 codeLettre = lireCodeUrl();
 if (codeLettre) {
@@ -2142,6 +2179,7 @@ function init() {
   render();
   majStatut(localStorage_disponible() ? 'Les modifications sont enregistrées automatiquement dans ce navigateur.' : '');
   initCloud();
+  initZoom();
 
   /* aide */
   try { if (localStorage.getItem(CLE_AIDE)) $('bandeau-aide').hidden = true; } catch (e) {}
